@@ -1,1 +1,1 @@
-CFLAGS=-Wall
+CFLAGS=-Wall -ggdb
