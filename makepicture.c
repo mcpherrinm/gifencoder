@@ -70,7 +70,10 @@ struct GIFheader {
    char pixelaspectratio;
 } __attribute__((packed));
 
-size_t LZW(int colours, char *input, size_t len, char *output) {
+/*
+ *  
+ */
+size_t LZW(int colours, char *input, size_t len, unsigned char *output) {
   struct pair {short code; char *data; size_t len;};
   char init_colours[] = {0,1,2,3};
 #define I(i) {i, &(init_colours[i])}
@@ -81,20 +84,59 @@ size_t LZW(int colours, char *input, size_t len, char *output) {
   size_t clear = 4;
   size_t END = 5;
 
-  char *codes = malloc(sizeof(len+3)); // uncompressed length + two start bytes + end byte
-  codes[0] = 2; // bits per pixel
-  codes[1] = table[clear].code;
-  int i = 2;
+  unsigned char *codes = malloc(sizeof(len+3)); // uncompressed length + two start bytes + end byte
+  codes[0] = table[clear].code;
+  int i = 1;
   for(;i < len; i++) {
-    // uh, literal codes are cool guys. Let's not compress!
+    // Todo: use string table to use codes > END
     codes[i] = input[i];
   }
 
-  codes[i] = END;
-  char desiredoutdata[] = {0x02, 0x16, 0x8C, 0x2D, 0x99, 0x87, 0x2A, 0x1C, 0xDC, 0x33, 0xA0, 0x02,
-                             0x75, 0xEC, 0x95, 0xFA, 0xA8, 0xDE, 0x60, 0x8C, 0x04, 0x91, 0x4C, 0x01, 0x0};
+  codes[i++] = END;
+
+  int bitsperpixel = 0;
+  if(colours == 4) {
+    bitsperpixel=2;
+  }
+  int codesize = 2; // max(2, bitsperpixel) -- for > 4 colour support.
+  output[0] = codesize;
+  output[1] = 0xFF; // block size goes here
+  int bitposition = 16;
+  int j = 0;
+  for(;j < i; j++){
+    if(codes[j] == 1<<codesize) {
+      codesize++;
+      printf("buffing code size to %d\n", codesize);
+    }
+    // Write this code to the output stream:
+    int freebits = 8 - bitposition%8;
+    if(freebits >= codesize) {
+      if(freebits == 8) {
+        output[bitposition/8] = 0;
+      }
+      printf("Writing %dth code %d to byte %d shifted %d\n", j, codes[j], bitposition/8, bitposition % 8);
+      output[bitposition/8] |= codes[j] << bitposition % 8;
+    } else {
+      // split into two bytes
+      printf("Writing %dth code %d to bytes %d, %d shifted %d\n", j, codes[j], bitposition/8, bitposition/8 +1, bitposition % 8);
+      unsigned char mask = (1<<freebits) - 1;
+      output[bitposition/8] |= (codes[j] &  mask) << bitposition % 8;
+      output[bitposition/8 + 1] = codes[j] >> freebits;
+    }
+    bitposition += codesize;
+  }
+  int last = bitposition/8 + 1;
+  output[1] = last;
+  output[last++] = 0;
+  return last;
+  #if 0
+  char desiredoutdata[] = {0x02, 0x16, 0x8C, 0x2D, 0x99, 0x87, 0x2A,
+                           0x1C, 0xDC, 0x33, 0xA0, 0x02, 0x75, 0xEC,
+                           0x95, 0xFA, 0xA8, 0xDE, 0x60, 0x8C, 0x04,
+                           0x91, 0x4C, 0x01, 0x0};
   memcpy(output, desiredoutdata, sizeof(desiredoutdata));
   return sizeof(desiredoutdata);
+  #endif
 };
 
 /*
@@ -102,7 +144,7 @@ size_t LZW(int colours, char *input, size_t len, char *output) {
  * Takes an image and a buffer to encode into
  * Returns the length of the encoded image
  */
-size_t encodeGIF(struct image* image, char *output) {
+size_t encodeGIF(struct image* image, unsigned char *output) {
   const uint16_t delaytime = 0;
 
   size_t length = 0;
@@ -112,7 +154,7 @@ size_t encodeGIF(struct image* image, char *output) {
   ((struct GIFheader *)output)->width = image->width;
   ((struct GIFheader *)output)->height = image->height;
   ((struct GIFheader *)output)->packed = 0x91; // todo; make this depend on image colour table
-  ((struct GIFheader *)output)->bgcolour = 0; // first colour is background. Usually white.
+  ((struct GIFheader *)output)->bgcolour = 0; // first colour is background.
   ((struct GIFheader *)output)->pixelaspectratio = 0;
   length += sizeof(struct GIFheader);
 
@@ -179,7 +221,7 @@ int main(int argc, char **argv) {
   FILE *output = fopen("solved.gif", "w");
   assert(output);
 
-  char imagedata[100] = {
+  char imagedata[400] = {
     1, 1, 1, 1, 1, 2, 2, 2, 2, 2,
     1, 1, 1, 1, 1, 2, 2, 2, 2, 2,
     1, 1, 1, 1, 1, 2, 2, 2, 2, 2,
@@ -189,7 +231,8 @@ int main(int argc, char **argv) {
     2, 2, 2, 0, 0, 0, 0, 1, 1, 1,
     2, 2, 2, 2, 2, 1, 1, 1, 1, 1,
     2, 2, 2, 2, 2, 1, 1, 1, 1, 1,
-    2, 2, 2, 2, 2, 1, 1, 1, 1, 1 };
+    2, 2, 2, 2, 2, 1, 1, 1, 1, 1
+    };
 
   struct colour table[4] =
     {{0xFF, 0xFF, 0xFF},
@@ -203,7 +246,7 @@ int main(int argc, char **argv) {
     10, 10,
     imagedata,
   };
-  char outbuffer[1024];
+  unsigned char outbuffer[2040]; // TODO size pessimistically
   int outlen = encodeGIF(&image, outbuffer);
   fwrite(outbuffer, outlen, 1, output);
   fclose(output);
