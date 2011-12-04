@@ -74,37 +74,74 @@ struct GIFheader {
  *  
  */
 size_t LZW(int colours, char *input, size_t len, unsigned char *output) {
-  struct pair {short code; char *data; size_t len;};
+
+  int i = 0;
+  unsigned char *codes = malloc(sizeof(len+3)); // uncompressed length + two start bytes + end byte
+  {
+
+  struct entry {char *data; size_t len;};
   char init_colours[] = {0,1,2,3};
-#define I(i) {i, &(init_colours[i])}
-  struct pair table[32] = { I(0), I(1), I(2), I(3), {4, 0}, {5, 0} };
+#define I(i) {&(init_colours[i]), 1}
+  /* This table is big enough: After 0xFFF, need to <cc> and restart */
+  struct entry table[4096] = { I(0), I(1), I(2), I(3), {0, 1}, {0, 1} };
   int ts = 6;
-  (void)ts;
-  (void)output;
+
   size_t clear = 4;
   size_t END = 5;
 
-  unsigned char *codes = malloc(sizeof(len+3)); // uncompressed length + two start bytes + end byte
-  codes[0] = table[clear].code;
-  int i = 1;
-  for(;i < len; i++) {
-    // Todo: use string table to use codes > END
-    codes[i] = input[i];
+  int j = 0;
+  codes[i++] = clear;
+  /* Encode the input into the code stream */
+  while(j < len) {
+    // Find the largest string [...] starting at i that is in the table
+    int pflen = 1;
+    int t;
+    int best = -1;
+    int bestlen = 0;
+    // Inefficient:
+    for(t = 0; t < ts; t++) {
+      if(pflen+j > len) break;
+      if(t == 4 || t == 5) continue;
+      if(pflen == table[t].len && 0 == memcmp(input+j, table[t].data, pflen)) {
+        best = t;
+        bestlen = pflen;
+        t = 0;
+        pflen++;
+      }
+    }
+    /* Add [...]K (1 longer than match) to the table */
+    table[ts].data = input+j;
+    table[ts].len  = pflen;
+    /////
+    printf("#%d from %d\t", ts, j);
+    int ii = 0;
+    for(ii = 0; ii < table[ts].len; ii++) {
+      printf("%d, ", table[ts].data[ii]);
+    }
+    putchar('\n');
+    /////
+    ts++;
+    j += bestlen;
+    codes[i++] = best;
   }
 
   codes[i++] = END;
 
+  }
+
+  {
   int bitsperpixel = 0;
   if(colours == 4) {
     bitsperpixel=2;
   }
   int codesize = 2; // max(2, bitsperpixel) -- for > 4 colour support.
   output[0] = codesize;
+  codesize++; // Because wat, GIF oddness.
   output[1] = 0xFF; // block size goes here
   int bitposition = 16;
   int j = 0;
   for(;j < i; j++){
-    if(codes[j] == 1<<codesize) {
+    if(codes[j] == (1<<codesize) - 1) {
       codesize++;
       printf("buffing code size to %d\n", codesize);
     }
@@ -129,14 +166,7 @@ size_t LZW(int colours, char *input, size_t len, unsigned char *output) {
   output[1] = last;
   output[last++] = 0;
   return last;
-  #if 0
-  char desiredoutdata[] = {0x02, 0x16, 0x8C, 0x2D, 0x99, 0x87, 0x2A,
-                           0x1C, 0xDC, 0x33, 0xA0, 0x02, 0x75, 0xEC,
-                           0x95, 0xFA, 0xA8, 0xDE, 0x60, 0x8C, 0x04,
-                           0x91, 0x4C, 0x01, 0x0};
-  memcpy(output, desiredoutdata, sizeof(desiredoutdata));
-  return sizeof(desiredoutdata);
-  #endif
+  }
 };
 
 /*
@@ -246,7 +276,7 @@ int main(int argc, char **argv) {
     10, 10,
     imagedata,
   };
-  unsigned char outbuffer[2040]; // TODO size pessimistically
+  unsigned char outbuffer[4000]; // TODO size pessimistically
   int outlen = encodeGIF(&image, outbuffer);
   fwrite(outbuffer, outlen, 1, output);
   fclose(output);
