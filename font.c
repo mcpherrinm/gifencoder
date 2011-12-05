@@ -4,8 +4,16 @@ struct letter{
   char lines[5];
 };
 
-struct letter alpha[27] = {
-/*@*/ {{ 0, 0, 0, 0, 0}},
+const char START = ':';
+struct letter alpha[] = {
+
+/*:*/ {{ 0b00000, 0b00100, 0b00000, 0b00100, 0b00000, }},
+/*;*/ {{ 0b00000, 0b00100, 0b00000, 0b00100, 0b01000, }},
+/*<*/ {{ 0b00010, 0b00100, 0b01000, 0b00100, 0b00010, }},
+/*=*/ {{ 0b00000, 0b01110, 0b00000, 0b01110, 0b00000 }},
+/*>*/ {{ 0b01000, 0b00100, 0b00010, 0b00100, 0b01000, }},
+/*?*/ {{ 0b01100, 0b10010, 0b00100, 0b00000, 0b00100 }},
+/*@*/ {{ 0b01110, 0b10001, 0b10111, 0b10101, 0b10111 }},
 /*A*/ {{ 0b01110, 0b10001, 0b11111, 0b10001, 0b10001 }},
  {{ 0b11110, 0b10001, 0b11110, 0b10001, 0b11110 }},
  {{ 0b01110, 0b10001, 0b10000, 0b10001, 0b01110 }},
@@ -40,8 +48,8 @@ void render(char *line, int colour, int top, int left, struct image *image) {
     int c; size_t idx = 0;
     while( (c = line[idx++]) ) {
       for(int j = 4; j >= 0; j--) {
-        if(1<<j & alpha[c-'@'].lines[i]) {
-          image->data[(top+i)*image->width + 6*(idx-1) +5-j +left] = colour;
+        if(1<<j & alpha[c-START].lines[i]) {
+          image->data[(top+i)*image->width + 6*(idx-1) +4-j +left] = colour;
         }
       }
     }

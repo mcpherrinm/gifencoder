@@ -118,11 +118,11 @@ size_t LZW(int colours, char *input, size_t len, unsigned char *output) {
       if(new == (1<<codesize)) {
         codesize++;
         printf("buffing code size to %d\n", codesize);
-        if(codesize >= 8) {
-          printf("Resetting code size\n");
-          bitposition = writebits(CLEAR, codesize, output, bitposition);
-          codesize = 2;
-        }
+//        if(codesize >= 8) {
+//          printf("Resetting code size\n");
+//          bitposition = writebits(CLEAR, codesize, output, bitposition);
+//          codesize = 2;
+//        }
       }
     }
     pos += tlen;

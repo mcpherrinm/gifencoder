@@ -62,6 +62,11 @@ int main(int argc, char **argv) {
     {0x00, 0x00, 0x00}
   };
 
+  const int GREY = 0;
+  const int RED = 1;
+  const int BLUE = 2;
+  const int BLACK = 3;
+
   struct image image = {
     4,
     table,
@@ -69,8 +74,7 @@ int main(int argc, char **argv) {
     imagedata,
   };
 
-  render("ABC@XYZ", 3,10, 0, &image);
-  //render("ABCDEFGHIJKLMNOPQRSTUVWXYZ", 1,18, 0, &image);
+  render("@@@@@?????????", BLACK, 0, 0, &image);
   unsigned char* outbuffer = malloc(image.width * image.height + 100); //dumb
   int outlen = encodeGIF(&image, outbuffer);
   fwrite(outbuffer, outlen, 1, output);
