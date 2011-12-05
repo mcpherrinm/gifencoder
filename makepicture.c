@@ -70,104 +70,117 @@ struct GIFheader {
    char pixelaspectratio;
 } __attribute__((packed));
 
-/*
- *  
- */
+size_t bitstream(int codesize, char *codebuf, size_t codes, unsigned char* output);
+
+
+struct lztable {
+  int size;
+  struct {char *data; size_t len;} d[4096];
+};
+
+/* Inefficient. Better data structure could help */
+int findprefix(struct lztable *table, char *where, int len, int *rvlen) {
+  int t;
+  int bestlen = 0;
+  int bestcode = -1;
+  for(t = 0; t < table->size; t++) {
+    if(t == 4 || t == 5) continue;
+    int tl = table->d[t].len;
+    char *d = table->d[t].data;
+    if(bestlen < tl && len >= tl
+       && 0 == memcmp(where, d, tl)) {
+      bestcode = t;
+      bestlen = tl;
+    }
+  }
+  *rvlen = bestlen;
+  return bestcode;
+}
+
+/* Adds entry to table */
+int add(struct lztable *table, char *data, int len) {
+  if(table->size > 4095) {
+    printf("Table size blowout; reset not implemented\n");
+    exit(-3);
+  }
+  table->d[table->size].len = len;
+  table->d[table->size].data = data;
+  printf("Adding %d ", table->size);
+  table->size++;
+  int i;
+  for(i = 0; i<len; i++){
+    printf("%d, ", data[i]);
+  }
+  putchar('\n');
+  return table->size -1;
+}
+
+int writebits(int value, int bitsize, unsigned char *output, int bitposition) {
+  // Write this code to the output stream:
+  int freebits = 8 - bitposition%8;
+  printf("Writing #%d size %d\n", value, bitsize);
+  if(freebits >= bitsize) {
+    if(freebits == 8) {
+      output[bitposition/8] = 0;
+    }
+    output[bitposition/8] |= value << bitposition % 8;
+  } else {
+    // split into two bytes
+    unsigned char mask = (1<<freebits) - 1;
+    output[bitposition/8] |= (value &  mask) << bitposition % 8;
+    output[bitposition/8 + 1] = value >> freebits;
+  }
+  return bitposition + bitsize;
+}
+
 size_t LZW(int colours, char *input, size_t len, unsigned char *output) {
-
-  int i = 0;
-  unsigned char *codes = malloc(sizeof(len+3)); // uncompressed length + two start bytes + end byte
-  {
-
-  struct entry {char *data; size_t len;};
   char init_colours[] = {0,1,2,3};
-#define I(i) {&(init_colours[i]), 1}
-  /* This table is big enough: After 0xFFF, need to <cc> and restart */
-  struct entry table[4096] = { I(0), I(1), I(2), I(3), {0, 1}, {0, 1} };
-  int ts = 6;
-
-  size_t clear = 4;
-  size_t END = 5;
-
   int j = 0;
-  codes[i++] = clear;
-  /* Encode the input into the code stream */
-  while(j < len) {
-    // Find the largest string [...] starting at i that is in the table
-    int pflen = 1;
-    int t;
-    int best = -1;
-    int bestlen = 0;
-    // Inefficient:
-    for(t = 0; t < ts; t++) {
-      if(pflen+j > len) break;
-      if(t == 4 || t == 5) continue;
-      if(pflen == table[t].len && 0 == memcmp(input+j, table[t].data, pflen)) {
-        best = t;
-        bestlen = pflen;
-        t = 0;
-        pflen++;
-      }
-    }
-    /* Add [...]K (1 longer than match) to the table */
-    table[ts].data = input+j;
-    table[ts].len  = pflen;
-    /////
-    printf("#%d from %d\t", ts, j);
-    int ii = 0;
-    for(ii = 0; ii < table[ts].len; ii++) {
-      printf("%d, ", table[ts].data[ii]);
-    }
-    putchar('\n');
-    /////
-    ts++;
-    j += bestlen;
-    codes[i++] = best;
+  struct lztable table;
+  table.size=6;
+  for(;j < 4; j++) {
+    table.d[j].data = &(init_colours[j]);
+    table.d[j].len  = 1;
+    putchar('k');
   }
+  putchar('\n');
 
-  codes[i++] = END;
-
-  }
-
-  {
-  int bitsperpixel = 0;
-  if(colours == 4) {
-    bitsperpixel=2;
-  }
-  int codesize = 2; // max(2, bitsperpixel) -- for > 4 colour support.
+  int codesize = 2;
   output[0] = codesize;
   codesize++; // Because wat, GIF oddness.
   output[1] = 0xFF; // block size goes here
   int bitposition = 16;
-  int j = 0;
-  for(;j < i; j++){
-    if(codes[j] == (1<<codesize) - 1) {
-      codesize++;
-      printf("buffing code size to %d\n", codesize);
-    }
-    // Write this code to the output stream:
-    int freebits = 8 - bitposition%8;
-    if(freebits >= codesize) {
-      if(freebits == 8) {
-        output[bitposition/8] = 0;
+
+  const size_t CLEAR = 4;
+  const size_t END = 5;
+
+  int pos = 0;
+  bitposition = writebits(CLEAR, codesize, output, bitposition);
+  /* Encode the input into the code stream */
+  while(pos < len) {
+    // Find the largest string [...] starting at i that is in the table
+    int tlen;
+    int this = findprefix(&table, input+pos, len-pos, &tlen); 
+    bitposition = writebits(this, codesize, output, bitposition);
+    if(pos+tlen+1 < len) {
+      int new = add(&table, input+pos, tlen + 1);
+      if(new == (1<<codesize)-1) {
+        codesize++;
+        printf("buffing code size to %d\n", codesize);
       }
-      printf("Writing %dth code %d to byte %d shifted %d\n", j, codes[j], bitposition/8, bitposition % 8);
-      output[bitposition/8] |= codes[j] << bitposition % 8;
-    } else {
-      // split into two bytes
-      printf("Writing %dth code %d to bytes %d, %d shifted %d\n", j, codes[j], bitposition/8, bitposition/8 +1, bitposition % 8);
-      unsigned char mask = (1<<freebits) - 1;
-      output[bitposition/8] |= (codes[j] &  mask) << bitposition % 8;
-      output[bitposition/8 + 1] = codes[j] >> freebits;
     }
-    bitposition += codesize;
+    pos += tlen;
   }
+  bitposition = writebits(END, codesize, output, bitposition);
+
   int last = bitposition/8 + 1;
   output[1] = last;
   output[last++] = 0;
   return last;
-  }
-};
+}
+
+
+
 
 /*
  * Encode a GIF
@@ -251,7 +264,7 @@ int main(int argc, char **argv) {
   FILE *output = fopen("solved.gif", "w");
   assert(output);
 
-  char imagedata[400] = {
+  const char sampledata[100] = {
     1, 1, 1, 1, 1, 2, 2, 2, 2, 2,
     1, 1, 1, 1, 1, 2, 2, 2, 2, 2,
     1, 1, 1, 1, 1, 2, 2, 2, 2, 2,
@@ -262,13 +275,18 @@ int main(int argc, char **argv) {
     2, 2, 2, 2, 2, 1, 1, 1, 1, 1,
     2, 2, 2, 2, 2, 1, 1, 1, 1, 1,
     2, 2, 2, 2, 2, 1, 1, 1, 1, 1
-    };
+  };
+
+  char *imagedata = malloc(sizeof(sampledata));
+
+  memcpy(imagedata, sampledata, sizeof(sampledata));
 
   struct colour table[4] =
-    {{0xFF, 0xFF, 0xFF},
-     {0xFF, 0x00, 0x00},
-     {0x00, 0x00, 0xFF},
-     {0x00, 0x00, 0x00}};
+  { {0xFF, 0xFF, 0xFF},
+    {0xFF, 0x00, 0x00},
+    {0x00, 0x00, 0xFF},
+    {0x00, 0x00, 0x00}
+  };
 
   struct image image = {
     4,
@@ -276,10 +294,12 @@ int main(int argc, char **argv) {
     10, 10,
     imagedata,
   };
-  unsigned char outbuffer[4000]; // TODO size pessimistically
+
+  unsigned char* outbuffer = malloc(image.width * image.height + 100); //dumb
   int outlen = encodeGIF(&image, outbuffer);
   fwrite(outbuffer, outlen, 1, output);
   fclose(output);
+  free(outbuffer);
   return 0;
 }
 
