@@ -1,4 +1,3 @@
-#include <stdio.h>
 #include "image.h"
 
 struct letter{
@@ -42,12 +41,9 @@ void render(char *line, int colour, int top, int left, struct image *image) {
     while( (c = line[idx++]) ) {
       for(int j = 4; j >= 0; j--) {
         if(1<<j & alpha[c-'@'].lines[i]) {
-          printf("#");
           image->data[(top+i)*image->width + 6*(idx-1) +5-j +left] = colour;
         }
       }
-      putchar(' ');
     }
-  putchar('\n');
   }
 }

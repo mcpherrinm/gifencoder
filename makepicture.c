@@ -7,12 +7,6 @@
  *   Todo: Add more commands?
  * Each command probably adds a frame to the animated gif output.
  */
-#include <stdio.h>
-#include <stdlib.h>
-#include <assert.h>
-#include <stdint.h>
-#include <unistd.h>
-#include <string.h>
 #include "image.h"
 
 char *slurp(FILE *fd) {
@@ -75,8 +69,8 @@ int main(int argc, char **argv) {
     imagedata,
   };
 
-  render("ABCDEFGHIJKLMNOPQRSTUVWXYZ", 3,10, 0, &image);
-  render("ABCDEFGHIJKLMNOPQRSTUVWXYZ", 1,18, 0, &image);
+  render("ABC@XYZ", 3,10, 0, &image);
+  //render("ABCDEFGHIJKLMNOPQRSTUVWXYZ", 1,18, 0, &image);
   unsigned char* outbuffer = malloc(image.width * image.height + 100); //dumb
   int outlen = encodeGIF(&image, outbuffer);
   fwrite(outbuffer, outlen, 1, output);
