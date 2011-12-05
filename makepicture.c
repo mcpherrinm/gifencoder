@@ -13,6 +13,7 @@
 #include <stdint.h>
 #include <unistd.h>
 #include <string.h>
+#include "image.h"
 
 char *slurp(FILE *fd) {
   int c;
@@ -36,24 +37,6 @@ void dumphelp(void) {
   exit(1);
 }
 
-struct colour {
-  char red;
-  char green;
-  char blue;
-} __attribute__((packed));
-
-/* Represents an uncompressed image */
-struct image {
-  /* How many colours are in the image*/
-  int colours;
-  /* What the colours are */
-  struct colour *colourtable;
-  int width;
-  int height;
-  char *data;
-};
-
-
 int main(int argc, char **argv) {
 #if 0
   char *maze, *commands;
@@ -67,61 +50,19 @@ int main(int argc, char **argv) {
     dumphelp();
   }
   assert(maze && commands);
-  //printf("Commands: '''%s''', Maze: '''%s'''\n", commands, maze);
+  printf("Commands: '''%s''', Maze: '''%s'''\n", commands, maze);
 #endif
- /* Start Writing GIF. 6 byte header & version is GIF89a */
+
   FILE *output = fopen("solved.gif", "w");
   assert(output);
 
-  const char sampledata[400] = {
-  1, 1, 1, 1, 1, 2, 2, 2, 2, 2,  1, 1, 1, 1, 1, 2, 2, 2, 2, 2,
-  1, 1, 1, 1, 1, 2, 2, 2, 2, 2,  1, 1, 1, 1, 1, 2, 2, 2, 2, 2,
-  1, 1, 1, 1, 1, 2, 2, 2, 2, 2,  1, 1, 1, 1, 1, 2, 2, 2, 2, 2,
-  1, 1, 1, 0, 0, 0, 0, 2, 2, 2,  1, 1, 1, 0, 0, 0, 0, 2, 2, 2,
-  1, 1, 1, 0, 0, 0, 0, 2, 2, 2,  1, 1, 1, 0, 0, 0, 0, 2, 2, 2,
-  2, 2, 2, 0, 0, 0, 0, 1, 1, 1,  2, 2, 2, 0, 0, 0, 0, 1, 1, 1,
-  2, 2, 2, 0, 0, 0, 0, 1, 1, 1,  2, 2, 2, 0, 0, 0, 0, 1, 1, 1,
-  2, 2, 2, 2, 2, 1, 1, 1, 1, 1,  2, 2, 2, 2, 2, 1, 1, 1, 1, 1,
-  2, 2, 2, 2, 2, 1, 1, 1, 1, 1,  2, 2, 2, 2, 2, 1, 1, 1, 1, 1,
-  2, 2, 2, 2, 2, 1, 1, 1, 1, 1,  2, 2, 2, 2, 2, 1, 1, 1, 1, 1,
-  1, 1, 1, 1, 1, 2, 2, 2, 2, 2,  1, 1, 1, 1, 1, 2, 2, 2, 2, 2,
-  1, 1, 1, 1, 1, 2, 2, 2, 2, 2,  1, 1, 1, 1, 1, 2, 2, 2, 2, 2,
-  1, 1, 1, 1, 1, 2, 2, 2, 2, 2,  1, 1, 1, 1, 1, 2, 2, 2, 2, 2,
-  1, 1, 1, 0, 0, 0, 0, 2, 2, 2,  1, 1, 1, 0, 0, 0, 0, 2, 2, 2,
-  1, 1, 1, 0, 0, 0, 0, 2, 2, 2,  1, 1, 1, 0, 0, 0, 0, 2, 2, 2,
-  2, 2, 2, 0, 0, 0, 0, 1, 1, 1,  2, 2, 2, 0, 0, 0, 0, 1, 1, 1,
-  2, 2, 2, 0, 0, 0, 0, 1, 1, 1,  2, 2, 2, 0, 0, 0, 0, 1, 1, 1,
-  2, 2, 2, 2, 2, 1, 1, 1, 1, 1,  2, 2, 2, 2, 2, 1, 1, 1, 1, 1,
-  2, 2, 2, 2, 2, 1, 1, 1, 1, 1,  2, 2, 2, 2, 2, 1, 1, 1, 1, 1,
-  2, 2, 2, 2, 2, 1, 1, 1, 1, 1,  2, 2, 2, 2, 2, 1, 1, 1, 1, 1,
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-  };
 
-  char *imagedata = malloc(sizeof(sampledata));
+  char *imagedata = malloc(500*500);
+  memset(imagedata, 0, 500*500);
 
-  memcpy(imagedata, sampledata, sizeof(sampledata));
 
   struct colour table[4] =
-  { {0xFF, 0xFF, 0xFF},
+  { {0xDD, 0xDD, 0xDD},
     {0xFF, 0x00, 0x00},
     {0x00, 0x00, 0xFF},
     {0x00, 0x00, 0x00}
@@ -130,10 +71,12 @@ int main(int argc, char **argv) {
   struct image image = {
     4,
     table,
-    20, 20,
+    160, 25,
     imagedata,
   };
 
+  render("ABCDEFGHIJKLMNOPQRSTUVWXYZ", 3,10, 0, &image);
+  render("ABCDEFGHIJKLMNOPQRSTUVWXYZ", 1,18, 0, &image);
   unsigned char* outbuffer = malloc(image.width * image.height + 100); //dumb
   int outlen = encodeGIF(&image, outbuffer);
   fwrite(outbuffer, outlen, 1, output);

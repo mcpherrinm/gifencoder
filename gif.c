@@ -1,3 +1,4 @@
+#include "image.h"
 
 /* GIF image header and logical screen descriptor */
 struct GIFheader {
@@ -62,6 +63,10 @@ int add(struct lztable *table, char *data, int len) {
 }
 
 int writebits(int value, int bitsize, unsigned char *output, int bitposition) {
+  if(bitsize > 8) {
+    printf("negatory capn\n");
+    exit(-4);
+  }
   // Write this code to the output stream:
   int freebits = 8 - bitposition%8;
   printf("Writing #%d size %d\n", value, bitsize);
@@ -113,6 +118,11 @@ size_t LZW(int colours, char *input, size_t len, unsigned char *output) {
       if(new == (1<<codesize)) {
         codesize++;
         printf("buffing code size to %d\n", codesize);
+        if(codesize >= 8) {
+          printf("Resetting code size\n");
+          bitposition = writebits(CLEAR, codesize, output, bitposition);
+          codesize = 2;
+        }
       }
     }
     pos += tlen;
