@@ -74,7 +74,7 @@ int main(int argc, char **argv) {
     imagedata,
   };
 
-  render("@@@@@?????????", BLACK, 0, 0, &image);
+  render(argc == 2? argv[1]: "HI GUYS", BLACK, 10, 5, &image);
   unsigned char* outbuffer = malloc(image.width * image.height + 100); //dumb
   int outlen = encodeGIF(&image, outbuffer);
   fwrite(outbuffer, outlen, 1, output);
