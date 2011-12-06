@@ -23,5 +23,5 @@ struct image {
   char *data;
 };
 
-size_t encodeGIF(struct image* image, unsigned char *output);
+size_t encodeGIF(struct image* image, unsigned char *output, FILE *fd);
 void render(char *line, int colour, int top, int left, struct image *image);

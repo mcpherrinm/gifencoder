@@ -50,13 +50,11 @@ int main(int argc, char **argv) {
   FILE *output = fopen("solved.gif", "w");
   assert(output);
 
-
-  char *imagedata = malloc(500*500);
-  memset(imagedata, 0, 500*500);
-
-
+  /*TODO get len/width from maze */
+  int width = 500;
+  int height= 500;
   struct colour table[4] =
-  { {0xDD, 0xDD, 0xDD},
+  { {0xDD, 0xFF, 0xFF},
     {0xFF, 0x00, 0x00},
     {0x00, 0x00, 0xFF},
     {0x00, 0x00, 0x00}
@@ -67,19 +65,25 @@ int main(int argc, char **argv) {
   const int BLUE = 2;
   const int BLACK = 3;
 
+  char *imagedata = malloc(height*width);
+  memset(imagedata, GREY, height*width);
+
   struct image image = {
     4,
     table,
-    160, 25,
+    /*height, width,*/
+    500, 100,
     imagedata,
   };
 
   render(argc == 2? argv[1]: "HI GUYS", BLACK, 10, 5, &image);
+  render(argc == 2? argv[1]: "HI GUYS", RED, 20, 5, &image);
+  render(argc == 2? argv[1]: "HI GUYS", BLUE, 30, 5, &image);
   unsigned char* outbuffer = malloc(image.width * image.height + 100); //dumb
-  int outlen = encodeGIF(&image, outbuffer);
-  fwrite(outbuffer, outlen, 1, output);
+  int outlen = encodeGIF(&image, outbuffer, output);
   fclose(output);
   free(outbuffer);
+//  free(imagedata);
   return 0;
 }
 

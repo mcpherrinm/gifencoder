@@ -52,39 +52,52 @@ int add(struct lztable *table, char *data, int len) {
   }
   table->d[table->size].len = len;
   table->d[table->size].data = data;
-  printf("Adding %d ", table->size);
   table->size++;
+#ifdef DEBUG_TABLE
+  printf("Adding %d ", table->size -1);
   int i;
   for(i = 0; i<len; i++){
     printf("%d, ", data[i]);
   }
   putchar('\n');
+#endif
   return table->size -1;
 }
 
-int writebits(int value, int bitsize, unsigned char *output, int bitposition) {
-  if(bitsize > 8) {
-    printf("negatory capn\n");
-    exit(-4);
-  }
+void writeblock(unsigned char *output, int bitposition, FILE *fd) {
+    int bytes = bitposition/8 + (bitposition%8 == 0? 0 : 1); // end is for partial byte
+    printf("flushing buffer of length %d\n", bytes);
+    fputc(bytes, fd);
+    if(1 != fwrite(output, bytes, 1, fd)) {
+      puts("Write Fail!");
+      exit(-16);
+    }
+}
+
+int writebits(int value, int bitsize, unsigned char *output, int bitposition, FILE *fd) {
   // Write this code to the output stream:
-  int freebits = 8 - bitposition%8;
-  printf("Writing #%d size %d\n", value, bitsize);
-  if(freebits >= bitsize) {
+  //printf("Writing #%d size %d: ", value, bitsize);
+
+  if(bitposition+bitsize > 8*255) {
+    writeblock(output, bitposition, fd);
+    bitposition = 0;
+  }
+  while(bitsize > 0) {
+    int freebits = 8 - bitposition%8;
     if(freebits == 8) {
       output[bitposition/8] = 0;
     }
-    output[bitposition/8] |= value << bitposition % 8;
-  } else {
-    // split into two bytes
-    unsigned char mask = (1<<freebits) - 1;
-    output[bitposition/8] |= (value &  mask) << bitposition % 8;
-    output[bitposition/8 + 1] = value >> freebits;
+    int writebits = freebits > bitsize ? bitsize : freebits ; // min
+    output[bitposition/8] |= (value & ((1<<writebits)-1)) << bitposition % 8;
+    value = value >> writebits;
+    bitsize -= writebits;
+    bitposition += writebits;
   }
-  return bitposition + bitsize;
+  return bitposition;
 }
 
-size_t LZW(int colours, char *input, size_t len, unsigned char *output) {
+void LZW(int colours, char *input, size_t len, FILE* fd) {
+  unsigned char *output = malloc(256); // not on stack for valgrind
   char init_colours[] = {0,1,2,3};
   int j = 0;
   struct lztable table;
@@ -97,42 +110,45 @@ size_t LZW(int colours, char *input, size_t len, unsigned char *output) {
   putchar('\n');
 
   int codesize = 2;
-  output[0] = codesize;
+  putc(codesize, fd);
   codesize++; // Because wat, GIF oddness.
-  output[1] = 0xFF; // block size goes here
-  int bitposition = 16;
+  int bitposition = 0;
 
   const size_t CLEAR = 4;
   const size_t END = 5;
 
   int pos = 0;
-  bitposition = writebits(CLEAR, codesize, output, bitposition);
+  bitposition = writebits(CLEAR, codesize, output, bitposition, fd);
   /* Encode the input into the code stream */
   while(pos < len) {
     // Find the largest string [...] starting at i that is in the table
     int tlen;
     int this = findprefix(&table, input+pos, len-pos, &tlen); 
-    bitposition = writebits(this, codesize, output, bitposition);
+    //printf("#%d, ", this);
+    bitposition = writebits(this, codesize, output, bitposition, fd);
     if(pos+tlen+1 < len) {
       int new = add(&table, input+pos, tlen + 1);
       if(new == (1<<codesize)) {
         codesize++;
         printf("buffing code size to %d\n", codesize);
-//        if(codesize >= 8) {
-//          printf("Resetting code size\n");
-//          bitposition = writebits(CLEAR, codesize, output, bitposition);
-//          codesize = 2;
-//        }
+        if(codesize >= 12) {
+          printf("Resetting code size\n");
+          // doesn't seem to work
+          exit(-10);
+          bitposition = writebits(CLEAR, codesize, output, bitposition, fd);
+          codesize = 2;
+          table.size= 6;
+        }
       }
     }
     pos += tlen;
   }
-  bitposition = writebits(END, codesize, output, bitposition);
+  bitposition = writebits(END, codesize, output, bitposition,fd );
 
-  int last = bitposition/8 + 1;
-  output[1] = last-2;
-  output[last++] = 0;
-  return last;
+  writeblock(output, bitposition, fd);
+
+  fputc(0, fd);
+  free(output);
 }
 
 
@@ -141,7 +157,7 @@ size_t LZW(int colours, char *input, size_t len, unsigned char *output) {
  * Takes an image and a buffer to encode into
  * Returns the length of the encoded image
  */
-size_t encodeGIF(struct image* image, unsigned char *output) {
+size_t encodeGIF(struct image* image, unsigned char *output, FILE* fd) {
   const uint16_t delaytime = 0;
 
   size_t length = 0;
@@ -192,9 +208,9 @@ size_t encodeGIF(struct image* image, unsigned char *output) {
 
     /* More flags: Local colour table; interlacing */
     output[length++] = 0;
-
-    length += LZW(4, image->data, image->width*image->height, output+length);
+    fwrite(output, length, 1 , fd);
+    LZW(4, image->data, image->width*image->height, fd);
   }
-  output[length++] = 0x3B; /* Trailer, end of file */
+  fputc(0x3B, fd);
   return length;
 }
