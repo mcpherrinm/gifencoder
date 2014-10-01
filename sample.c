@@ -1,7 +1,7 @@
 #include "image.h"
 
 int main() {
-  FILE *output = fopen("sample.gif", "w");
+  FILE *output = fopen("sample.gif", "wb");
   assert(output);
 
   char imagedata[] = {

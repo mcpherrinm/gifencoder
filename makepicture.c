@@ -47,7 +47,7 @@ int main(int argc, char **argv) {
   printf("Commands: '''%s''', Maze: '''%s'''\n", commands, maze);
 #endif
 
-  FILE *output = fopen("solved.gif", "w");
+  FILE *output = fopen("solved.gif", "wb");
   assert(output);
 
   /*TODO get len/width from maze */
